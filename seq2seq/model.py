@@ -11,6 +11,7 @@ import shutil
 from seq2seq.cnn_model import ConvolutionalNet
 from seq2seq.cnn_model import DownSamplingConvolutionalNet
 from seq2seq.seq2seq_model import EncoderRNN
+from seq2seq.seq2seq_model import EncoderTransformer
 from seq2seq.seq2seq_model import Attention
 from seq2seq.seq2seq_model import LuongAttentionDecoderRNN
 from seq2seq.seq2seq_model import BahdanauAttentionDecoderRNN
@@ -60,12 +61,21 @@ class Model(nn.Module):
 
         # Input: [batch_size, max_input_length]
         # Output: [batch_size, hidden_size], [batch_size, max_input_length, hidden_size]
-        self.encoder = EncoderRNN(input_size=input_vocabulary_size,
-                                  embedding_dim=embedding_dimension,
-                                  rnn_input_size=embedding_dimension,
-                                  hidden_size=encoder_hidden_size, num_layers=num_encoder_layers,
-                                  dropout_probability=encoder_dropout_p, bidirectional=encoder_bidirectional,
-                                  padding_idx=input_padding_idx)
+        if kwargs["kwargs"]["encoder"] == "bilstm":
+            self.encoder = EncoderRNN(input_size=input_vocabulary_size,
+                                    embedding_dim=embedding_dimension,
+                                    rnn_input_size=embedding_dimension,
+                                    hidden_size=encoder_hidden_size, num_layers=num_encoder_layers,
+                                    dropout_probability=encoder_dropout_p, bidirectional=encoder_bidirectional,
+                                    padding_idx=input_padding_idx)
+        else:
+            self.encoder = EncoderTransformer(input_size=input_vocabulary_size,
+                                    embedding_dim=embedding_dimension,
+                                    num_layers=num_encoder_layers,
+                                    dropout_probability=encoder_dropout_p, hidden_size=encoder_hidden_size,
+                                    padding_idx=input_padding_idx,
+                                    n_heads=4)
+
         # Used to project the final encoder state to the decoder hidden state such that it can be initialized with it.
         self.enc_hidden_to_dec_hidden = nn.Linear(encoder_hidden_size, decoder_hidden_size)
         self.textual_attention = Attention(key_size=encoder_hidden_size, query_size=decoder_hidden_size,

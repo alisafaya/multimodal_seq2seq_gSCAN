@@ -94,6 +94,74 @@ class EncoderRNN(nn.Module):
                                              self.dropout_probability, self.input_size)
 
 
+class EncoderTransformer(nn.Module):
+    """
+    Embed a sequence of symbols using a Transformer Encoder.
+    """
+    def __init__(self, input_size: int, embedding_dim: int, num_layers: int, hidden_size: int,
+                 dropout_probability: float, padding_idx: int, n_heads: int):
+        """
+        :param input_size: number of input symbols
+        :param embedding_dim: number of hidden units in RNN encoder, and size of all embeddings
+        :param num_layers: number of hidden layers
+        :param dropout_probability: dropout applied to symbol embeddings and RNNs
+        """
+        super(EncoderTransformer, self).__init__()
+        
+        self.num_layers = num_layers
+        self.input_size = input_size
+        self.embedding_dim = embedding_dim
+        self.n_heads = n_heads
+        self.hidden_size = hidden_size
+        self.dropout_probability = dropout_probability
+
+        self.embedding = nn.Embedding(input_size, embedding_dim, padding_idx=padding_idx)
+        self.dropout = nn.Dropout(dropout_probability)
+        self.project = nn.Linear(embedding_dim, hidden_size)
+
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=n_heads, dropout=dropout_probability, dim_feedforward=int(4 * hidden_size))
+        self.encoder_transformer = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
+
+
+    def forward(self, input_batch: torch.LongTensor, input_lengths: List[int]) -> Tuple[torch.Tensor, dict]:
+        """
+        :param input_batch: [batch_size, max_length]; batched padded input sequences
+        :param input_lengths: length of each padded input sequence.
+        :return: hidden states for last layer of last time step, the output of the last layer per time step and
+        the sequence lengths per example in the batch.
+        NB: The hidden states in the bidirectional case represent the final hidden state of each directional encoder,
+        meaning the whole sequence in both directions, whereas the output per time step represents different parts of
+        the sequences (0:t for the forward LSTM, t:T for the backward LSTM).
+        """
+        assert input_batch.size(0) == len(input_lengths), "Wrong amount of lengths passed to .forward()"
+        input_embeddings = self.embedding(input_batch)  # [batch_size, max_length, embedding_dim]
+        input_embeddings = self.dropout(input_embeddings)  # [batch_size, max_length, embedding_dim]
+
+        # Sort the sequences by length in descending order.
+        batch_size = len(input_lengths)
+        max_length = max(input_lengths)
+        input_lengths = torch.tensor(input_lengths, device=device, dtype=torch.long)
+        input_lengths, perm_idx = torch.sort(input_lengths, descending=True)
+        input_embeddings = input_embeddings.index_select(dim=0, index=perm_idx)
+        projected_embeddings = self.project(input_embeddings)
+
+        output_per_timestep = self.encoder_transformer(projected_embeddings.permute(1, 0, 2))
+        hidden = torch.mean(output_per_timestep, dim=1)
+
+        # Reverse the sorting.
+        _, unperm_idx = perm_idx.sort(0)
+        hidden = hidden.index_select(dim=0, index=unperm_idx)
+        output_per_timestep = output_per_timestep.index_select(dim=1, index=unperm_idx)
+        input_lengths = input_lengths[unperm_idx].tolist()
+        return hidden, {"encoder_outputs": output_per_timestep, "sequence_lengths": input_lengths}
+
+    def extra_repr(self) -> str:
+        return "EncoderRNN\n bidirectional={} \n num_layers={}\n hidden_size={}\n dropout={}\n "\
+               "n_input_symbols={}\n".format(self.bidirectional, self.num_lauers, self.hidden_size,
+                                             self.dropout_probability, self.input_size)
+
+
+
 class Attention(nn.Module):
 
     def __init__(self, key_size: int, query_size: int, hidden_size: int):

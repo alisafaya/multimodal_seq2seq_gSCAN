@@ -80,6 +80,7 @@ parser.add_argument("--auxiliary_task", dest="auxiliary_task", default=False, ac
 parser.add_argument("--no_auxiliary_task", dest="auxiliary_task", default=True, action="store_false")
 
 # Command Encoder arguments
+parser.add_argument("--encoder", type=str, choices=['bilstm', 'transformer'])
 parser.add_argument("--embedding_dimension", type=int, default=25)
 parser.add_argument("--num_encoder_layers", type=int, default=1)
 parser.add_argument("--encoder_hidden_size", type=int, default=100)
