@@ -146,7 +146,7 @@ class EncoderTransformer(nn.Module):
         projected_embeddings = self.project(input_embeddings)
 
         output_per_timestep = self.encoder_transformer(projected_embeddings.permute(1, 0, 2))
-        hidden = torch.mean(output_per_timestep, dim=1)
+        hidden = torch.mean(output_per_timestep, dim=0)
 
         # Reverse the sorting.
         _, unperm_idx = perm_idx.sort(0)
